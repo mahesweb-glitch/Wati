@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WhatsApp Multi-User QR & Messaging</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 40px;
+      background: #f5f5f5;
+    }
+    #qr, #status, #sendMessage {
+      margin-top: 20px;
+    }
+    img {
+      border: 5px solid #25D366;
+      border-radius: 10px;
+    }
+    input, button {
+      margin: 5px;
+      padding: 10px;
+      font-size: 16px;
+    }
+    input {
+      width: 250px;
+    }
+    button {
+      background: #25D366;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #1da851;
+    }
+  </style>
+</head>
+<body>
+  <h1>WhatsApp Multi-User Dashboard</h1>
+  <p>Paste your JWT token below and initialize your WhatsApp session</p>
+
+  <input type="text" id="token" placeholder="Enter JWT Token" style="width:60%" />
+  <button onclick="saveToken()">Save Token & Init</button>
+
+  <div id="qr">Loading QR...</div>
+  <p id="status">Status: Unknown</p>
+
+  <div id="sendMessage">
+    <h3>Send Test Message</h3>
+    <input id="phone" type="text" placeholder="Phone with country code (e.g., 919876543210)" /><br/>
+    <input id="msg" type="text" placeholder="Your message" /><br/>
+    <button onclick="sendMessage()">Send</button>
+    <p id="sendResult"></p>
+  </div>
+
+  <script>
+    const clientId = "myphone"; // Change if you want multiple clients
+
+    function saveToken() {
+      const token = document.getElementById("token").value;
+      if (!token) return alert("Enter JWT token first");
+      localStorage.setItem("jwt", token);
+
+      // Initialize WhatsApp session
+      fetch(`/api/whatsapp/${clientId}/init`, {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token }
+      }).catch(err => console.error("Init error:", err));
+
+      loadQr();
+      checkStatus();
+    }
+
+    async function loadQr() {
+      const token = localStorage.getItem("jwt");
+      if (!token) {
+        document.getElementById("qr").innerHTML = "Please enter your JWT token above";
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/whatsapp/${clientId}/qr`, {
+          headers: { "Authorization": "Bearer " + token }
+        });
+        const data = await response.json();
+        if (data.qr) {
+          document.getElementById("qr").innerHTML =
+            "<img src='" + data.qr + "' width='300' height='300'/>";
+        } else {
+          document.getElementById("qr").innerHTML = data.message || "QR not ready";
+        }
+      } catch (err) {
+        document.getElementById("qr").innerHTML = "Error fetching QR";
+      }
+    }
+
+    async function checkStatus() {
+      const token = localStorage.getItem("jwt");
+      if (!token) return;
+
+      try {
+        const response = await fetch(`/api/whatsapp/${clientId}/status`, {
+          headers: { "Authorization": "Bearer " + token }
+        });
+        const data = await response.json();
+        document.getElementById("status").innerText =
+          "Status: " + (data.status || "Unknown");
+      } catch (err) {
+        document.getElementById("status").innerText = "Error checking status";
+      }
+    }
+
+    async function sendMessage() {
+      const token = localStorage.getItem("jwt");
+      if (!token) return alert("Enter JWT token first");
+
+      const phone = document.getElementById("phone").value;
+      const message = document.getElementById("msg").value;
+      if (!phone || !message) return alert("Enter phone and message");
+
+      try {
+        const response = await fetch(`/api/whatsapp/${clientId}/send-text`, {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + token,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ phone, message })
+        });
+        const data = await response.json();
+        if (data.success) {
+          document.getElementById("sendResult").innerText = "✅ Message sent!";
+        } else {
+          document.getElementById("sendResult").innerText =
+            "❌ Error: " + (data.error || "Failed");
+        }
+      } catch (err) {
+        document.getElementById("sendResult").innerText = "Error sending message";
+      }
+    }
+
+    // Auto-refresh QR and status every 10 seconds
+    setInterval(() => {
+      loadQr();
+      checkStatus();
+    }, 10000);
+
+    // Initial load if token is already saved
+    if (localStorage.getItem("jwt")) {
+      loadQr();
+      checkStatus();
+    }
+  </script>
+</body>
+</html>
